@@ -1,37 +1,100 @@
-#define WINDOWS_TERMINAL
+// #define SHADERed 1     		// automatically set by shaderD to 1
+// #define WINDOWS_TERMINAL 1 // automatically set when no other environment is setr
 
-Texture2D shaderTexture;
-SamplerState samplerState;
+//#define TEXT_OVERLAY 1  		// when set, always displays text over shader.
+
+#ifndef WINDOWS_TERMINAL
+  #define WINDOWS_TERMINAL 0
+#endif
+#ifndef SHADERed
+  #define SHADERed 0
+#endif
+
+#if SHADERed <= 0
+  #define WINDOWS_TERMINAL 1
+#endif
+
+
+#if WINDOWS_TERMINAL
+  #define HLSL 1
+  #define TEXT_OVERLAY 1
+#endif
+
+#if SHADERed
+  #define HLSL 1
+#endif
+
+#ifndef HLSL
+  #define HLSL 0
+#endif
+#ifndef GLSL
+  #define GLSL 0
+#endif
+
+#if WINDOWS_TERMINAL + SHADERed > 1
+  #error "Only one environment can be defined at a time."
+#endif
 
 // --------------------
-#if defined(WINDOWS_TERMINAL)
+// GLSL => HLSL adapters
+#if HLSL
+  #define vec2  float2
+  #define vec3  float3
+  #define vec4  float4
+  #define mat2  float2x2
+  #define mat3  float3x3
+  #define fract frac
+  #define mix   lerp
+  
+  #define TIME Time
+  #define RESOLUTION  Resolution
+#endif
+
+// HLSL => GLSL adapters
+#if GLSL
+  #define float2    vec2
+  #define float3    vec3
+  #define float4    vec4
+  #define float2x2  mat2
+  #define float3x3  mat3
+  #define frac      fract
+  #define lerp      mix
+  
+  #define TIME Time
+  #define RESOLUTION  Resolution
+#endif
+
+
+// Define map for PS input
+struct PSInput {
+  float4 pos : SV_POSITION;
+  float2 uv : TEXCOORD0;
+};
+
+// The terminal graphics as a texture
+Texture2D shaderTexture : register(t0);
+SamplerState samplerState : register(s0);
+Texture2D image : register(t1);
+
+// Terminal settings such as the resolution of the texture
 cbuffer PixelShaderSettings {
   float  Time;
   float  Scale;
   float2 Resolution;
   float4 Background;
 };
-
-#define TIME        Time
-#define RESOLUTION  Resolution
-#else
-float time;
-float2 resolution;
-
-#define TIME        time
-#define RESOLUTION  resolution
-#endif
 // --------------------
 
-// --------------------
-// GLSL => HLSL adapters
-#define vec2  float2
-#define vec3  float3
-#define vec4  float4
-#define mat2  float2x2
-#define mat3  float3x3
-#define fract frac
-#define mix   lerp
+
+// Settings - Debug
+#define DEBUG                   1
+#define DEBUG_ROTATION          ((Time/10) % 3)
+#define DEBUG_SEGMENTS          1
+#define DEBUG_OFFSET            0.425
+#define DEBUG_WIDTH             0.4
+#define SHOW_UV                 0
+#define SHOW_POS                0
+
 
 float mod(float x, float y) {
   return x - y * floor(x/y);
@@ -53,6 +116,9 @@ static const vec3 unit3 = vec3(1.0, 1.0, 1.0);
 #define MAX_RAY_LENGTH  10.0
 #define MAX_RAY_MARCHES 60
 #define NORM_OFF        0.005
+#define TRI_1 vec2( -cos(30), -sin(30))
+#define TRI_2 vec2( cos(30), -sin(30))
+#define TRI_3 vec2( 0  ,  1)
 
 //float g_mod = 2.5;
 
@@ -240,31 +306,70 @@ vec3 effect(vec2 p) {
   return col;
 }
 
-//
-// PS_OUTPUT ps_main(in PS_INPUT In)
-#if defined(WINDOWS_TERMINAL)
-float4 main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
-#else
-float4 ps_main(float4 pos : SV_POSITION, float2 tex : TEXCOORD) : SV_TARGET
-#endif
-{
-  vec2 q = tex;
-  vec2 p = -1.0 + 2.0*q;
-#if defined(WINDOWS_TERMINAL)
-  p.y = -p.y;
-#endif
-  p.x *= RESOLUTION.x/RESOLUTION.y;
 
+#if SHADERed
+// Must be inlined to the shader or it breaks single-step debugging
+PSInput patchCoordinates(PSInput pin);
+
+struct DebugOut {
+  bool show;
+  float4 color;
+};
+DebugOut debug(float4 pos, float2 uv);
+#endif
+
+vec3 getRgb(vec2 p){
   vec3 col = effect(p);
   col = aces_approx(col);
   col = sRGB(col);
+  return col;
+}
 
-#if defined(WINDOWS_TERMINAL)
+float4 main(PSInput pin) : SV_TARGET
+{
+  vec4 pos = pin.pos;
+  vec2 uv = pin.uv;
+  
+  #if SHADERed
+  // Must be inlined to the shader or it breaks single-step debugging
+  // Patches the pin pos and uv
+  PSInput patchedPin = patchCoordinates(pin);
+  pos = patchedPin.pos;
+  uv = patchedPin.uv;
+  
+  #if TEXT_OVERLAY
+	  // Patches in the UV Debug output
+	  DebugOut debugOut = debug(pos, uv);
+	  if (debugOut.show) { return debugOut.color; }
+  #endif
+  #endif
+
+  vec2 pixelSize = 1.0 / RESOLUTION.xy;
+
+
+  vec2 q = uv;
+  vec2 p = -1.0 + 2.0*q;
+  p.y = -p.y;
+  p.x *= RESOLUTION.x/RESOLUTION.y;
+  
+  vec3 totalCol = getRgb(p) +
+                  getRgb(p + pixelSize * TRI_1) +
+                  getRgb(p + pixelSize * TRI_2) +
+                  getRgb(p + pixelSize * TRI_3);
+  vec3 col = totalCol / 4.0;
+
+  #if TEXT_OVERLAY
   vec4 fg = shaderTexture.Sample(samplerState, q);
   vec4 sh = shaderTexture.Sample(samplerState, q+2.0*vec2(-1.0, 1.0)/RESOLUTION.xy);
   col = mix(col, 0.0*unit3, sh.w);
   col = mix(col, fg.xyz, fg.w);
-#endif
+  #endif
 
   return vec4(col, 1.0);
 }
+
+
+#if SHADERed
+#include "SHADERed/PS-DebugPatch.hlsl"
+#include "SHADERed/PS-CoordinatesPatch.hlsl"
+#endif
