@@ -76,13 +76,16 @@ float4 main(PSInput pin) : SV_TARGET
   #endif
 
 //-- Shader goes here --//
-  uv = -1.0 + 2.0 * uv;
+  float2 normalizedUv = -1.0 + 2.0 * uv;
   float4 color = float4(
-    abs(sin(cos(Time + 3.0 * uv.y) * 2.0 * uv.x + Time)),
-    abs(cos(sin(Time + 2.0 * uv.x) * 3.0 * uv.y + Time)),
+    abs(sin(cos(Time + 3.0 * normalizedUv.y) * 2.0 * normalizedUv.x + Time)),
+    abs(cos(sin(Time + 2.0 * normalizedUv.x) * 3.0 * normalizedUv.y + Time)),
     cos(Time) * 0.5 + 0.5,
     1.0f);
-return color;
+
+  float4 foregroundColor = shaderTexture.Sample(samplerState, uv);
+  color = lerp(color, foregroundColor, foregroundColor.w);
+  return color;
 //-- Shader goes here --//
 }
 
