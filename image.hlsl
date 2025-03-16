@@ -1,7 +1,7 @@
 // #define SHADERed 1     		// automatically set by shaderD to 1
 // #define WINDOWS_TERMINAL 1 // automatically set when no other environment is setr
 
-//#define TEXT_OVERLAY 1  		// when set, always displays text over shader.
+#define TEXT_OVERLAY 1  		// when set, always displays text over shader. implies debug.
 
 #ifndef WINDOWS_TERMINAL
   #define WINDOWS_TERMINAL 0
@@ -74,7 +74,7 @@ struct PSInput {
 // The terminal graphics as a texture
 Texture2D shaderTexture : register(t0);
 SamplerState samplerState : register(s0);
-Texture2D image : register(t1);
+Texture2D imageTexture : register(t1);
 
 // Terminal settings such as the resolution of the texture
 cbuffer PixelShaderSettings {
@@ -344,7 +344,7 @@ float4 main(PSInput pin) : SV_TARGET
   #endif
   #endif
 
-  vec2 pixelSize = 1. / RESOLUTION.xy;
+  vec2 pixelSize = 1 / RESOLUTION.xy;
 
 
   vec2 q = uv;
@@ -361,6 +361,9 @@ float4 main(PSInput pin) : SV_TARGET
   // vec3 col = effect(p);
   // col = aces_approx(col);
   // col = sRGB(col);
+  
+  vec4 imageColor = imageTexture.Sample(samplerState, q);
+  col = mix(col, imageColor.xyz, 0.5);
 
   #if TEXT_OVERLAY
   vec4 fg = shaderTexture.Sample(samplerState, q);
