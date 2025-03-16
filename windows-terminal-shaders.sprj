@@ -3,7 +3,7 @@
 	<pipeline>
 		<pass name="WindowsTerminal" type="shader" active="true" patchverts="1">
 			<shader type="vs" path="SHADERed\VS.hlsl" entry="main" />
-			<shader type="ps" path="demonstration.hlsl" entry="main" />
+			<shader type="ps" path="image.hlsl" entry="main" />
 			<inputlayout>
 				<item value="Position" semantic="POSITION" />
 				<item value="Texcoord" semantic="TEXCOORD0" />
@@ -67,8 +67,11 @@
 		</pass>
 	</pipeline>
 	<objects>
-		<object type="texture" path="SHADERed\sample.png" vflip="true" min_filter="Linear" mag_filter="Nearest" wrap_s="ClampToEdge" wrap_t="ClampToEdge">
+		<object type="texture" path="SHADERed\sample_transparent.png" vflip="true" min_filter="Linear" mag_filter="Nearest" wrap_s="ClampToEdge" wrap_t="ClampToEdge">
 			<bind slot="0" name="WindowsTerminal" />
+		</object>
+		<object type="texture" path="SHADERed\background.png" vflip="true" min_filter="Linear" mag_filter="Nearest" wrap_s="Repeat" wrap_t="Repeat">
+			<bind slot="1" name="WindowsTerminal" />
 		</object>
 	</objects>
 	<cameras />
